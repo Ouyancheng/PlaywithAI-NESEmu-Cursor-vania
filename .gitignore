@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Xcode / Apple build artifacts
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.dSYM/
+
+# CMake / build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Testing/
+CTestTestfile.cmake
+*.app/
+
+# Editor / local files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# NES ROMs and related copyrighted game images
+*.nes
+*.NES

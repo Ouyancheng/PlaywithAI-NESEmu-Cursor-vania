@@ -122,11 +122,12 @@ The APU generates NES audio samples. It currently models:
 - Triangle channel with linear counter and length counter.
 - Noise channel with envelope and LFSR mode.
 - Frame counter timing for quarter-frame and half-frame updates.
+- DMC sample fetching, output level stepping, looping, IRQ status, and TND mixer contribution.
 - Nonlinear NES-style channel mixing.
-- A simple output smoothing filter.
+- A low-cut DC blocker plus high-frequency-preserving 18 kHz low-pass output stage, with conservative gain balancing to avoid clipping.
 - Expansion audio input from mappers such as VRC6.
 
-The DMC channel is not yet implemented. Audio is clocked once per CPU cycle, not once per PPU cycle.
+Audio is clocked once per CPU cycle, not once per PPU cycle. DMC sample fetches are routed through the CPU bus address space so ROM sample data can come from the active cartridge mapping.
 
 ## Cartridge
 
@@ -238,7 +239,7 @@ The app shell uses:
 - MetalKit for nearest-neighbor video presentation.
 - CoreAudio AudioQueue for sound output.
 
-The frontend runs emulation through an `NSTimer` and renders through `MTKView`. Video upload uses `Nes::framebufferSnapshot()` so Metal never reads from a framebuffer while the emulator is mutating it.
+The frontend runs emulation through an `NSTimer` and renders through `MTKView`. Video upload uses `Nes::framebufferSnapshot()` so Metal never reads from a framebuffer while the emulator is mutating it. AudioQueue output keeps a FIFO of generated samples; if the callback underruns, it ramps from the previous sample when audio resumes instead of jumping abruptly.
 
 ## Tests
 
@@ -250,6 +251,7 @@ The tests are focused smoke and regression tests. They cover:
 
 - CPU execution basics.
 - Interrupt status restoration after `RTI`.
+- APU frame-counter IRQ behavior and DMC sample fetching.
 - Cartridge loading.
 - PPU frame completion.
 - OAM DMA.
@@ -263,7 +265,7 @@ The emulator is now playable for the tested Super Mario and Akumajou Densetsu pa
 
 Useful next accuracy targets:
 
-- DMC audio.
+- DMC edge cases and sample-fetch CPU stall timing.
 - More exact APU frame counter edge behavior.
 - More complete sprite overflow behavior.
 - More mapper-specific conformance tests.

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace nes {
 
@@ -10,6 +11,11 @@ namespace {
 constexpr u8 kLengthTable[32] = {
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
     12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+};
+
+constexpr u16 kDmcPeriodTable[16] = {
+    428, 380, 340, 320, 286, 254, 226, 214,
+    190, 160, 142, 128, 106, 84, 72, 54,
 };
 
 }
@@ -38,9 +44,30 @@ void APU::reset() {
     noiseLoop_ = false;
     noiseMode_ = false;
     noiseEnabled_ = false;
+    frameFiveStep_ = false;
+    frameIrqInhibit_ = false;
+    frameIrqPending_ = false;
+    dmcIrqEnabled_ = false;
+    dmcLoop_ = false;
+    dmcIrqPending_ = false;
+    dmcEnabled_ = false;
+    dmcTimer_ = kDmcPeriodTable[0];
+    dmcCounter_ = dmcTimer_;
+    dmcOutputLevel_ = 0;
+    dmcSampleAddress_ = 0xc000;
+    dmcSampleLength_ = 1;
+    dmcCurrentAddress_ = dmcSampleAddress_;
+    dmcBytesRemaining_ = 0;
+    dmcSampleBuffer_ = 0;
+    dmcSampleBufferEmpty_ = true;
+    dmcShiftRegister_ = 0;
+    dmcBitsRemaining_ = 8;
+    dmcSilence_ = true;
     clock_ = 0;
     sampleClock_ = 0.0;
-    filteredSample_ = 0.0f;
+    dcBlockPrevInput_ = 0.0f;
+    dcBlockPrevOutput_ = 0.0f;
+    lowPassOutput_ = 0.0f;
     expansionLevel_ = 0;
     samples_.clear();
 }
@@ -63,15 +90,31 @@ void APU::clock() {
         const u16 feedback = static_cast<u16>((noiseLfsr_ ^ (noiseLfsr_ >> tap)) & 1);
         noiseLfsr_ = static_cast<u16>((noiseLfsr_ >> 1) | (feedback << 14));
     }
+    clockDmc();
 
-    if (clock_ == 7457 || clock_ == 14913 || clock_ == 22371 || clock_ >= 29829) {
-        quarterFrame();
-    }
-    if (clock_ == 14913 || clock_ >= 29829) {
-        halfFrame();
-    }
-    if (clock_ >= 29829) {
-        clock_ = 0;
+    if (frameFiveStep_) {
+        if (clock_ == 7457 || clock_ == 14913 || clock_ == 22371 || clock_ >= 37281) {
+            quarterFrame();
+        }
+        if (clock_ == 14913 || clock_ >= 37281) {
+            halfFrame();
+        }
+        if (clock_ >= 37281) {
+            clock_ = 0;
+        }
+    } else {
+        if (clock_ == 7457 || clock_ == 14913 || clock_ == 22371 || clock_ >= 29829) {
+            quarterFrame();
+        }
+        if (clock_ == 14913 || clock_ >= 29829) {
+            halfFrame();
+        }
+        if (clock_ >= 29829) {
+            if (!frameIrqInhibit_) {
+                frameIrqPending_ = true;
+            }
+            clock_ = 0;
+        }
     }
 
     sampleClock_ += 44100.0 / static_cast<double>(kCpuFrequencyNtsc);
@@ -135,23 +178,63 @@ void APU::cpuWrite(u16 address, u8 data) {
     } else if (address == 0x400f) {
         noiseLengthCounter_ = kLengthTable[data >> 3];
         noiseEnvelopeStart_ = true;
+    } else if (address == 0x4010) {
+        dmcIrqEnabled_ = (data & 0x80) != 0;
+        dmcLoop_ = (data & 0x40) != 0;
+        dmcTimer_ = kDmcPeriodTable[data & 0x0f];
+        if (!dmcIrqEnabled_) {
+            dmcIrqPending_ = false;
+        }
+    } else if (address == 0x4011) {
+        dmcOutputLevel_ = data & 0x7f;
+    } else if (address == 0x4012) {
+        dmcSampleAddress_ = static_cast<u16>(0xc000 | (data << 6));
+    } else if (address == 0x4013) {
+        dmcSampleLength_ = static_cast<u16>((data << 4) | 0x0001);
     } else if (address == 0x4015) {
         pulse_[0].enabled = (data & 0x01) != 0;
         pulse_[1].enabled = (data & 0x02) != 0;
         triangleEnabled_ = (data & 0x04) != 0;
         noiseEnabled_ = (data & 0x08) != 0;
+        dmcEnabled_ = (data & 0x10) != 0;
         if (!pulse_[0].enabled) pulse_[0].lengthCounter = 0;
         if (!pulse_[1].enabled) pulse_[1].lengthCounter = 0;
         if (!triangleEnabled_) triangleLengthCounter_ = 0;
         if (!noiseEnabled_) noiseLengthCounter_ = 0;
+        if (!dmcEnabled_) {
+            dmcBytesRemaining_ = 0;
+        } else if (dmcBytesRemaining_ == 0) {
+            restartDmcSample();
+        }
+        dmcIrqPending_ = false;
+    } else if (address == 0x4017) {
+        frameFiveStep_ = (data & 0x80) != 0;
+        frameIrqInhibit_ = (data & 0x40) != 0;
+        if (frameIrqInhibit_) {
+            frameIrqPending_ = false;
+        }
+        clock_ = 0;
+        if (frameFiveStep_) {
+            quarterFrame();
+            halfFrame();
+        }
     }
 }
 
 u8 APU::cpuRead(u16) {
-    return static_cast<u8>((pulse_[0].lengthCounter ? 0x01 : 0) |
-                           (pulse_[1].lengthCounter ? 0x02 : 0) |
-                           (triangleLengthCounter_ ? 0x04 : 0) |
-                           (noiseLengthCounter_ ? 0x08 : 0));
+    const u8 status = static_cast<u8>((pulse_[0].lengthCounter ? 0x01 : 0) |
+                                      (pulse_[1].lengthCounter ? 0x02 : 0) |
+                                      (triangleLengthCounter_ ? 0x04 : 0) |
+                                      (noiseLengthCounter_ ? 0x08 : 0) |
+                                      (dmcBytesRemaining_ ? 0x10 : 0) |
+                                      (frameIrqPending_ ? 0x40 : 0) |
+                                      (dmcIrqPending_ ? 0x80 : 0));
+    frameIrqPending_ = false;
+    return status;
+}
+
+void APU::setDmcReader(std::function<u8(u16)> reader) {
+    dmcReader_ = std::move(reader);
 }
 
 void APU::setExpansionAudio(u8 level) {
@@ -190,12 +273,23 @@ float APU::nextSample() {
     if (noiseEnabled_ && noiseLengthCounter_ > 0 && (noiseLfsr_ & 1) == 0) {
         noiseOut = static_cast<float>(noiseConstantVolume_ ? noiseVolume_ : noiseEnvelopeVolume_);
     }
-    const float tndDenominator = triangleOut / 8227.0f + noiseOut / 12241.0f;
+    const float dmcOut = static_cast<float>(dmcOutputLevel_);
+    const float tndDenominator = triangleOut / 8227.0f + noiseOut / 12241.0f + dmcOut / 22638.0f;
     const float tndOut = tndDenominator > 0.0f ? 159.79f / ((1.0f / tndDenominator) + 100.0f) : 0.0f;
-    const float expansionOut = static_cast<float>(expansionLevel_) / 96.0f;
-    const float mixed = std::clamp((pulseOut + tndOut + expansionOut) * 1.75f, -1.0f, 1.0f);
-    filteredSample_ += 0.18f * (mixed - filteredSample_);
-    return filteredSample_;
+    const float expansionOut = static_cast<float>(expansionLevel_) / 128.0f;
+    const float mixed = (pulseOut + tndOut + expansionOut) * 1.18f;
+
+    constexpr float sampleRate = 44100.0f;
+    constexpr float pi = 3.14159265358979323846f;
+    const float dc = std::exp(-2.0f * pi * 20.0f / sampleRate);
+    const float lp18k = 1.0f - std::exp(-2.0f * pi * 18000.0f / sampleRate);
+
+    const float dcBlocked = dc * (dcBlockPrevOutput_ + mixed - dcBlockPrevInput_);
+    dcBlockPrevInput_ = mixed;
+    dcBlockPrevOutput_ = dcBlocked;
+
+    lowPassOutput_ += lp18k * (dcBlocked - lowPassOutput_);
+    return std::clamp(lowPassOutput_, -1.0f, 1.0f);
 }
 
 void APU::quarterFrame() {
@@ -255,6 +349,57 @@ void APU::halfFrame() {
     if (!noiseLoop_ && noiseLengthCounter_ > 0) {
         --noiseLengthCounter_;
     }
+}
+
+void APU::clockDmc() {
+    if (dmcSampleBufferEmpty_ && dmcBytesRemaining_ > 0 && dmcReader_) {
+        dmcSampleBuffer_ = dmcReader_(dmcCurrentAddress_);
+        dmcSampleBufferEmpty_ = false;
+        dmcCurrentAddress_ = dmcCurrentAddress_ == 0xffff ? 0x8000 : static_cast<u16>(dmcCurrentAddress_ + 1);
+        --dmcBytesRemaining_;
+        if (dmcBytesRemaining_ == 0) {
+            if (dmcLoop_) {
+                restartDmcSample();
+            } else if (dmcIrqEnabled_) {
+                dmcIrqPending_ = true;
+            }
+        }
+    }
+
+    if (dmcCounter_ > 0) {
+        --dmcCounter_;
+        return;
+    }
+    dmcCounter_ = dmcTimer_;
+
+    if (dmcBitsRemaining_ == 0) {
+        dmcBitsRemaining_ = 8;
+        if (dmcSampleBufferEmpty_) {
+            dmcSilence_ = true;
+        } else {
+            dmcSilence_ = false;
+            dmcShiftRegister_ = dmcSampleBuffer_;
+            dmcSampleBufferEmpty_ = true;
+        }
+    }
+
+    if (!dmcSilence_) {
+        if (dmcShiftRegister_ & 0x01) {
+            if (dmcOutputLevel_ <= 125) {
+                dmcOutputLevel_ = static_cast<u8>(dmcOutputLevel_ + 2);
+            }
+        } else if (dmcOutputLevel_ >= 2) {
+            dmcOutputLevel_ = static_cast<u8>(dmcOutputLevel_ - 2);
+        }
+    }
+
+    dmcShiftRegister_ >>= 1;
+    --dmcBitsRemaining_;
+}
+
+void APU::restartDmcSample() {
+    dmcCurrentAddress_ = dmcSampleAddress_;
+    dmcBytesRemaining_ = dmcSampleLength_;
 }
 
 u16 APU::pulseSweepTarget(const Pulse& pulse, int channel) const {

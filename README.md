@@ -34,14 +34,14 @@ Implemented:
 - 6502 official opcode dispatcher with stack, interrupts, flags, addressing modes, cycle accounting, and common unofficial opcodes.
 - CPU bus with RAM mirroring, PPU/APU register routing, cartridge access, OAM DMA, and controller serial input.
 - PPU register model, loopy scroll timing, nametable/palette memory, scanline timing, vblank/NMI, background fetch shifters, sprite rendering, sprite-zero hit, and double-buffered frame publishing.
-- APU pulse, triangle, and noise sample generation with CoreAudio playback and VRC6 expansion audio mixing.
+- APU pulse, triangle, noise, and DMC sample generation with CoreAudio playback and VRC6 expansion audio mixing.
 - Mappers: NROM, MMC1, MMC3, Konami VRC6a, and Konami VRC6b.
 - Native macOS GUI with ROM picker, Metal display, keyboard input, reset, audio lifecycle, and locked framebuffer snapshots for stable presentation.
 
 Compatibility work that still needs test-ROM-driven iteration:
 
 - PPU edge cases, exact sprite overflow behavior, and broader rendering conformance.
-- DMC audio, more exact APU frame counter edge behavior, and exact mixer behavior.
+- More exact APU frame counter edge behavior, DMC edge cases, and exact mixer behavior.
 - MMC3 A12 IRQ edge timing and deeper Konami VRC6 conformance tests.
 - Save RAM persistence and NES 2.0 metadata.
 

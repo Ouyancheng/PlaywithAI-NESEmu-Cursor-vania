@@ -73,10 +73,20 @@ private:
             std::lock_guard<std::mutex> lock(mutex_);
             for (int i = 0; i < frames; ++i) {
                 if (!fifo_.empty()) {
-                    out[i] = fifo_.front();
+                    float sample = fifo_.front();
                     fifo_.pop_front();
+                    if (underrunRecovery_ > 0) {
+                        const float t = static_cast<float>(kRecoverySamples - underrunRecovery_ + 1) / static_cast<float>(kRecoverySamples);
+                        sample = recoveryStart_ + (sample - recoveryStart_) * t;
+                        --underrunRecovery_;
+                    }
+                    out[i] = sample;
+                    lastSample_ = sample;
                 } else {
-                    out[i] = 0.0f;
+                    lastSample_ *= 0.999f;
+                    out[i] = lastSample_;
+                    underrunRecovery_ = kRecoverySamples;
+                    recoveryStart_ = lastSample_;
                 }
             }
         }
@@ -87,6 +97,10 @@ private:
     AudioQueueBufferRef buffers_[3]{};
     std::mutex mutex_;
     std::deque<float> fifo_;
+    float lastSample_ = 0.0f;
+    static constexpr int kRecoverySamples = 64;
+    int underrunRecovery_ = 0;
+    float recoveryStart_ = 0.0f;
 };
 
 }

@@ -374,11 +374,65 @@ Result:
 
 The core publishes complete frames, and the app uploads stable snapshots.
 
+## Gameplay Music Percussion Pass
+
+Symptom:
+
+The gameplay background music could sound like it was missing some drum hits near the start of gameplay.
+
+Investigation:
+
+NES percussion often comes from the noise channel, but some games also use the DMC channel for short sampled transients. The APU already had pulse, triangle, and noise support, but it did not yet implement DMC sample playback or `$4017` frame-counter mode behavior.
+
+Action:
+
+- Added DMC register handling for `$4010-$4013`.
+- Added DMC enable/status behavior through `$4015`.
+- Added DMC sample fetching through the CPU bus address space.
+- Added DMC output level stepping, looping, and IRQ status.
+- Mixed DMC into the NES nonlinear TND mixer.
+- Added `$4017` four-step/five-step frame-counter behavior and frame IRQ inhibit handling.
+- Added regression tests for frame-counter IRQ behavior and DMC sample fetching.
+
+Result:
+
+The APU now covers the main hardware path used for sampled percussion and more accurate frame sequencing. Remaining audio work should focus on conformance-test details and subjective mixer balance rather than a completely missing DMC channel.
+
+## Background Music Pop Reduction
+
+Symptom:
+
+After DMC support landed, background music still had occasional popping noises.
+
+Investigation:
+
+The first pop-reduction attempt used stronger output filtering and de-click limiting. It reduced discontinuities, but it colored the VRC6 music too much and made the gameplay melody sound like it had shifted scale. The safer conclusion was that filtering should not be used to hide fundamental artifacts. Pops during quiet moments are more likely to come from DC level changes or audio callback underruns than from missing treble filtering.
+
+Action:
+
+- Replaced broad smoothing with a low-cut DC blocker plus a high-frequency-preserving low-pass stage.
+- Reduced the overall output gain enough to avoid clipping.
+- Reduced the VRC6 expansion contribution only moderately, without changing its pitch or waveform timing.
+- Changed CoreAudio underrun behavior to decay from the last sample instead of jumping immediately to zero.
+- Added a short underrun recovery ramp so audio resumes from the decayed value instead of stepping abruptly.
+
+Result:
+
+The generated gameplay audio stream has no clipping in the tested path while preserving more high-frequency content than the earlier smoothing pass. Percussion remains present, and sharp pops from clipping, DC shifts, and underrun recovery are reduced without the aggressive filtering that made the melody sound wrong.
+
+Follow-up:
+
+The first conservative smoothing value still filtered too much high-frequency content and made some BGM sound overly smooth. That led to replacing the smoothing-centered approach with the current DC-blocking approach, which targets quiet-state pops without intentionally dulling the musical harmonics.
+
+After confirming that quiet-state popping was gone, the output low-pass cutoff was raised from 14 kHz to 18 kHz so more high-frequency pulse/VRC6 harmonics can pass through. The DC blocker and AudioQueue underrun ramp remain responsible for pop prevention.
+
 ## Regression Tests Added During the Journey
 
 The test suite gained coverage for the bugs we found:
 
 - CPU interrupt status restoration after `RTI`.
+- APU frame-counter IRQ behavior.
+- APU DMC sample fetching and status.
 - OAM DMA smoke test.
 - VRC6 PRG-RAM enable/read/write.
 - VRC6 Mapper 26 address-line swap.

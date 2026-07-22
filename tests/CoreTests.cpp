@@ -134,6 +134,46 @@ void runOamDmaSmokeTest() {
     assert(bus.cpuRead(0x2004) == 0x42);
 }
 
+void runApuFrameCounterSmokeTest() {
+    nes::APU apu;
+    apu.reset();
+    apu.cpuWrite(0x4017, 0x00);
+    for (int i = 0; i < 29829; ++i) {
+        apu.clock();
+    }
+    assert((apu.cpuRead(0x4015) & 0x40) != 0);
+    assert((apu.cpuRead(0x4015) & 0x40) == 0);
+
+    apu.cpuWrite(0x4017, 0xc0);
+    for (int i = 0; i < 37281; ++i) {
+        apu.clock();
+    }
+    assert((apu.cpuRead(0x4015) & 0x40) == 0);
+}
+
+void runApuDmcFetchSmokeTest() {
+    nes::APU apu;
+    apu.reset();
+    int reads = 0;
+    nes::u16 lastAddress = 0;
+    apu.setDmcReader([&](nes::u16 address) {
+        ++reads;
+        lastAddress = address;
+        return static_cast<nes::u8>(0xff);
+    });
+
+    apu.cpuWrite(0x4010, 0x80);
+    apu.cpuWrite(0x4012, 0x02);
+    apu.cpuWrite(0x4013, 0x00);
+    apu.cpuWrite(0x4015, 0x10);
+    assert((apu.cpuRead(0x4015) & 0x10) != 0);
+
+    apu.clock();
+    assert(reads == 1);
+    assert(lastAddress == 0xc080);
+    assert((apu.cpuRead(0x4015) & 0x90) == 0x80);
+}
+
 void runVrc6MirroringSmokeTest() {
     nes::Cartridge::Header header;
     header.mapper = 24;
@@ -265,6 +305,8 @@ int main() {
     runCartridgeLoadTest();
     runNesFrameSmokeTest();
     runOamDmaSmokeTest();
+    runApuFrameCounterSmokeTest();
+    runApuDmcFetchSmokeTest();
     runVrc6MirroringSmokeTest();
     runVrc6PatternBankingStyleSmokeTest();
     runVrc6RomNametableSmokeTest();

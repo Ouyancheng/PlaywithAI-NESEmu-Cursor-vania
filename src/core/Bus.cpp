@@ -5,6 +5,9 @@ namespace nes {
 void Bus::insertCartridge(Cartridge* cartridge) {
     cartridge_ = cartridge;
     ppu_.connect(cartridge_);
+    apu_.setDmcReader([this](u16 address) {
+        return cpuRead(address);
+    });
 }
 
 void Bus::reset() {
