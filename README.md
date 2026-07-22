@@ -11,6 +11,8 @@ ctest --test-dir build --output-on-failure
 open build/TestAiNES.app
 ```
 
+CMake exports `build/compile_commands.json` for IDEs and language servers.
+
 ## Controls
 
 - `Z`: A
