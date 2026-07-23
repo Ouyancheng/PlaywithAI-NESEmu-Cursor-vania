@@ -4,6 +4,8 @@ TestAiNES is a greenfield NES emulator foundation written in C++20 with a native
 
 ## Build
 
+### macOS
+
 ```sh
 cmake -S . -B build
 cmake --build build
@@ -12,6 +14,28 @@ open build/TestAiNES.app
 ```
 
 CMake exports `build/compile_commands.json` for IDEs and language servers.
+
+### Windows
+
+Use a Visual Studio Developer PowerShell or another environment with a Windows C++ toolchain:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+.\build\Release\TestAiNES.exe
+```
+
+The Windows frontend is native Win32: GDI for video presentation, `waveOut` for audio, Win32 file dialogs, menus, timers, and keyboard input.
+
+### Testing Windows From macOS
+
+The Win32 frontend cannot be run directly on macOS without a compatibility layer or VM. Practical options:
+
+- Build and run on a Windows machine or VM.
+- Add a GitHub Actions `windows-latest` job to compile and run `nes_core_tests`.
+- Cross-compile from macOS with MinGW/LLVM-mingw if installed, then smoke-test under Wine if available.
+- Keep all emulator logic in `nes_core` so macOS tests continue to validate the portable core.
 
 ## Controls
 

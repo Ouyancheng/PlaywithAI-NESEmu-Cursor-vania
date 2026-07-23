@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(TestAiNES VERSION 0.1.0 LANGUAGES CXX OBJCXX)
+project(TestAiNES VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,9 +9,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
-
-set(CMAKE_OBJCXX_STANDARD 20)
-set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 
 add_library(nes_core
     src/core/APU.cpp
@@ -35,6 +32,10 @@ else()
 endif()
 
 if(APPLE)
+    enable_language(OBJCXX)
+    set(CMAKE_OBJCXX_STANDARD 20)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+
     add_executable(TestAiNES MACOSX_BUNDLE
         src/macos/main.mm
     )
@@ -60,6 +61,13 @@ if(APPLE)
         COMMAND codesign --force --deep --sign - "$<TARGET_BUNDLE_DIR:TestAiNES>"
         VERBATIM
     )
+endif()
+
+if(WIN32)
+    add_executable(TestAiNES WIN32
+        src/win32/main.cpp
+    )
+    target_link_libraries(TestAiNES PRIVATE nes_core winmm comdlg32)
 endif()
 
 add_executable(nes_core_tests
