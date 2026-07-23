@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
@@ -21,6 +23,7 @@ namespace {
 
 constexpr wchar_t kWindowClass[] = L"TestAiNESWin32Window";
 constexpr UINT_PTR kFrameTimer = 1;
+constexpr UINT kFrameTimerMs = 8;
 constexpr int kAudioSamplesPerBuffer = 2048;
 constexpr int kAudioBufferCount = 3;
 
@@ -34,6 +37,7 @@ public:
         if (wave_) {
             return true;
         }
+        stopping_ = false;
 
         WAVEFORMATEX format{};
         format.wFormatTag = WAVE_FORMAT_PCM;
@@ -64,6 +68,7 @@ public:
         if (!wave_) {
             return;
         }
+        stopping_ = true;
         waveOutReset(wave_);
         for (auto& buffer : buffers_) {
             waveOutUnprepareHeader(wave_, &buffer.header, sizeof(buffer.header));
@@ -94,11 +99,16 @@ private:
             return;
         }
         auto* player = reinterpret_cast<WaveOutPlayer*>(user);
+        if (player->stopping_) {
+            return;
+        }
         auto* header = reinterpret_cast<WAVEHDR*>(param1);
         for (auto& buffer : player->buffers_) {
             if (&buffer.header == header) {
                 player->fill(buffer);
-                waveOutWrite(player->wave_, &buffer.header, sizeof(buffer.header));
+                if (!player->stopping_ && player->wave_) {
+                    waveOutWrite(player->wave_, &buffer.header, sizeof(buffer.header));
+                }
                 return;
             }
         }
@@ -130,6 +140,7 @@ private:
 
     HWAVEOUT wave_ = nullptr;
     std::array<Buffer, kAudioBufferCount> buffers_{};
+    std::atomic_bool stopping_{false};
     std::mutex mutex_;
     std::deque<float> fifo_;
     float lastSample_ = 0.0f;
@@ -141,11 +152,9 @@ private:
 class App {
 public:
     bool create(HINSTANCE instance, int showCommand) {
-        instance_ = instance;
-
         WNDCLASSW wc{};
         wc.lpfnWndProc = &App::windowProcSetup;
-        wc.hInstance = instance_;
+        wc.hInstance = instance;
         wc.lpszClassName = kWindowClass;
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
@@ -167,8 +176,12 @@ public:
         bitmapInfo_.bmiHeader.biCompression = BI_RGB;
         pixels_.resize(nes::kScreenWidth * nes::kScreenHeight);
 
-        audio_.start();
-        SetTimer(hwnd_, kFrameTimer, 1000 / nes::kFrameRateNtsc, nullptr);
+        if (!audio_.start()) {
+            MessageBoxW(hwnd_, L"Audio output could not be started. The emulator will continue without sound.",
+                        L"Audio unavailable", MB_ICONWARNING | MB_OK);
+        }
+        lastFrameTick_ = Clock::now();
+        SetTimer(hwnd_, kFrameTimer, kFrameTimerMs, nullptr);
         ShowWindow(hwnd_, showCommand);
         UpdateWindow(hwnd_);
         return true;
@@ -184,6 +197,8 @@ public:
     }
 
 private:
+    using Clock = std::chrono::steady_clock;
+
     enum Command : UINT {
         CommandOpen = 100,
         CommandReset = 101,
@@ -212,10 +227,8 @@ private:
             handleCommand(LOWORD(wparam));
             return 0;
         case WM_TIMER:
-            if (wparam == kFrameTimer && loaded_) {
-                emulator_.stepFrame();
-                audio_.push(emulator_.takeAudioSamples());
-                InvalidateRect(hwnd, nullptr, FALSE);
+            if (wparam == kFrameTimer) {
+                onFrameTimer(hwnd);
             }
             return 0;
         case WM_PAINT:
@@ -252,7 +265,7 @@ private:
             openRom();
             break;
         case CommandReset:
-            if (loaded_) {
+            if (emulator_.hasCartridge()) {
                 emulator_.reset();
             }
             break;
@@ -283,7 +296,8 @@ private:
             MessageBoxW(hwnd_, widenAscii(error).c_str(), L"Could not load ROM", MB_ICONERROR | MB_OK);
             return;
         }
-        loaded_ = true;
+        frameAccumulator_ = std::chrono::duration<double>::zero();
+        lastFrameTick_ = Clock::now();
 
         std::wstring title = L"TestAiNES - ";
         title += std::filesystem::path(path).filename().wstring();
@@ -294,7 +308,7 @@ private:
     }
 
     void setKey(UINT key, bool pressed) {
-        if (!loaded_) {
+        if (!emulator_.hasCartridge()) {
             return;
         }
         switch (key) {
@@ -310,6 +324,33 @@ private:
         }
     }
 
+    void onFrameTimer(HWND hwnd) {
+        const auto now = Clock::now();
+        if (!emulator_.hasCartridge()) {
+            frameAccumulator_ = std::chrono::duration<double>::zero();
+            lastFrameTick_ = now;
+            return;
+        }
+
+        constexpr std::chrono::duration<double> frameDuration{1.0 / nes::kFrameRateNtsc};
+        frameAccumulator_ += now - lastFrameTick_;
+        lastFrameTick_ = now;
+
+        int framesStepped = 0;
+        while (frameAccumulator_ >= frameDuration && framesStepped < 2) {
+            emulator_.stepFrame();
+            audio_.push(emulator_.takeAudioSamples());
+            frameAccumulator_ -= frameDuration;
+            ++framesStepped;
+        }
+        if (framesStepped == 2 && frameAccumulator_ >= frameDuration) {
+            frameAccumulator_ = std::chrono::duration<double>::zero();
+        }
+        if (framesStepped > 0) {
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
+    }
+
     void paint() {
         PAINTSTRUCT ps{};
         HDC dc = BeginPaint(hwnd_, &ps);
@@ -317,7 +358,7 @@ private:
         GetClientRect(hwnd_, &client);
         FillRect(dc, &client, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
 
-        if (loaded_) {
+        if (emulator_.hasCartridge()) {
             const auto framebuffer = emulator_.framebufferSnapshot();
             for (std::size_t i = 0; i < framebuffer.size(); ++i) {
                 const auto& p = framebuffer[i];
@@ -343,13 +384,13 @@ private:
         EndPaint(hwnd_, &ps);
     }
 
-    HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
     nes::Nes emulator_;
     WaveOutPlayer audio_;
-    bool loaded_ = false;
     BITMAPINFO bitmapInfo_{};
     std::vector<DWORD> pixels_;
+    Clock::time_point lastFrameTick_{};
+    std::chrono::duration<double> frameAccumulator_{0.0};
 };
 
 } // namespace
