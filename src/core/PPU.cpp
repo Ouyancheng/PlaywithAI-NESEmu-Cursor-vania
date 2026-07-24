@@ -32,7 +32,9 @@ u16 normalizePaletteAddress(u16 address) {
 
 void PPU::connect(Cartridge* cartridge) {
     cartridge_ = cartridge;
+    scanlineStartEnabled_ = cartridge_ && cartridge_->usesScanlineStart();
     ppuFetchNotificationsEnabled_ = cartridge_ && cartridge_->usesPpuFetchNotifications();
+    lastPpuFetchKind_ = PpuFetchKind::Nametable;
 }
 
 void PPU::reset() {
@@ -51,6 +53,7 @@ void PPU::reset() {
     writeLatch_ = false;
     scanline_ = 0;
     cycle_ = 0;
+    lastPpuFetchKind_ = PpuFetchKind::Nametable;
     oddFrame_ = false;
     nmi_ = false;
     frameComplete_ = false;
@@ -60,7 +63,7 @@ void PPU::clock() {
     if (scanline_ >= 0 && scanline_ < 240 && cycle_ == 0) {
         prepareScanlineSprites();
     }
-    if (cartridge_ && scanline_ >= 0 && scanline_ < 240 && cycle_ == 4 && (mask_ & 0x18)) {
+    if (scanlineStartEnabled_ && scanline_ >= 0 && scanline_ < 240 && cycle_ == 4 && (mask_ & 0x18)) {
         cartridge_->scanlineStart(scanline_);
     }
     if (scanline_ >= 0 && scanline_ < 240 && cycle_ >= 1 && cycle_ <= 256) {
@@ -166,15 +169,9 @@ void PPU::clockBackgroundFetches() {
         switch ((cycle_ - 1) & 0x07) {
         case 0:
             loadBackgroundShifters();
-            if (ppuFetchNotificationsEnabled_) {
-                cartridge_->notifyPpuFetch(PpuFetchKind::Nametable);
-            }
             bgNextTileId_ = ppuRead(static_cast<u16>(0x2000 | (vramAddress_ & 0x0fff)));
             break;
         case 2: {
-            if (ppuFetchNotificationsEnabled_) {
-                cartridge_->notifyPpuFetch(PpuFetchKind::Attribute);
-            }
             const u16 attrAddress = static_cast<u16>(0x23c0 | (vramAddress_ & 0x0c00) |
                                                      ((vramAddress_ >> 4) & 0x38) |
                                                      ((vramAddress_ >> 2) & 0x07));
@@ -189,18 +186,14 @@ void PPU::clockBackgroundFetches() {
             break;
         }
         case 4: {
-            if (ppuFetchNotificationsEnabled_) {
-                cartridge_->notifyPpuFetch(PpuFetchKind::BackgroundPattern);
-            }
+            notifyMapperPpuFetch(PpuFetchKind::BackgroundPattern);
             const u16 fineY = static_cast<u16>((vramAddress_ >> 12) & 0x0007);
             const u16 table = (control_ & 0x10) ? 0x1000 : 0x0000;
             bgNextTileLsb_ = ppuRead(static_cast<u16>(table + bgNextTileId_ * 16 + fineY));
             break;
         }
         case 6: {
-            if (ppuFetchNotificationsEnabled_) {
-                cartridge_->notifyPpuFetch(PpuFetchKind::BackgroundPattern);
-            }
+            notifyMapperPpuFetch(PpuFetchKind::BackgroundPattern);
             const u16 fineY = static_cast<u16>((vramAddress_ >> 12) & 0x0007);
             const u16 table = (control_ & 0x10) ? 0x1000 : 0x0000;
             bgNextTileMsb_ = ppuRead(static_cast<u16>(table + bgNextTileId_ * 16 + fineY + 8));
@@ -225,11 +218,16 @@ void PPU::clockBackgroundFetches() {
         transferScrollY();
     }
     if (cycle_ == 338 || cycle_ == 340) {
-        if (ppuFetchNotificationsEnabled_) {
-            cartridge_->notifyPpuFetch(PpuFetchKind::Nametable);
-        }
         bgNextTileId_ = ppuRead(static_cast<u16>(0x2000 | (vramAddress_ & 0x0fff)));
     }
+}
+
+void PPU::notifyMapperPpuFetch(PpuFetchKind kind) {
+    if (!ppuFetchNotificationsEnabled_ || lastPpuFetchKind_ == kind) {
+        return;
+    }
+    lastPpuFetchKind_ = kind;
+    cartridge_->notifyPpuFetch(kind);
 }
 
 void PPU::prepareScanlineSprites() {
@@ -429,9 +427,7 @@ u8 PPU::spritePixel(int x, int y, u8 bgPixel, Rgb& color) {
             pattern = static_cast<u16>(((control_ & 0x08) ? 0x1000 : 0x0000) + tile * 16 + row);
         }
 
-        if (ppuFetchNotificationsEnabled_) {
-            cartridge_->notifyPpuFetch(PpuFetchKind::SpritePattern);
-        }
+        notifyMapperPpuFetch(PpuFetchKind::SpritePattern);
         const u8 lo = ppuRead(pattern);
         const u8 hi = ppuRead(pattern + 8);
         const u8 bit = static_cast<u8>(7 - col);

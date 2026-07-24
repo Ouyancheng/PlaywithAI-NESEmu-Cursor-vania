@@ -161,6 +161,10 @@ void Cartridge::scanline() {
     }
 }
 
+bool Cartridge::usesScanlineStart() const {
+    return mapper_ && mapper_->usesScanlineStart();
+}
+
 void Cartridge::scanlineStart(int scanline) {
     if (mapper_) {
         mapper_->scanlineStart(scanline);

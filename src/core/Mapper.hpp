@@ -32,6 +32,7 @@ public:
     virtual void reset() {}
     virtual void clockCpu() {}
     virtual void scanline() {}
+    virtual bool usesScanlineStart() const { return false; }
     virtual void scanlineStart(int) {}
     virtual bool usesPpuFetchNotifications() const { return false; }
     virtual void notifyPpuFetch(PpuFetchKind) {}

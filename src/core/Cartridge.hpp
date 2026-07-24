@@ -30,6 +30,7 @@ public:
     void reset();
     void clockCpu();
     void scanline();
+    bool usesScanlineStart() const;
     void scanlineStart(int scanline);
     bool usesPpuFetchNotifications() const;
     void notifyPpuFetch(PpuFetchKind kind);

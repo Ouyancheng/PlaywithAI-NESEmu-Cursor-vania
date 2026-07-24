@@ -17,6 +17,7 @@ public:
     void reset() override;
     void clockCpu() override;
     void scanline() override {}
+    bool usesScanlineStart() const override { return true; }
     void scanlineStart(int scanline) override;
     bool usesPpuFetchNotifications() const override { return true; }
     void notifyPpuFetch(PpuFetchKind kind) override { fetchKind_ = kind; }

@@ -36,12 +36,15 @@ private:
     void clockBackgroundFetches();
     void prepareScanlineSprites();
     void drawPixel();
+    void notifyMapperPpuFetch(PpuFetchKind kind);
     u8 backgroundPixel(int x, int y, u8& palette);
     u8 spritePixel(int x, int y, u8 bgPixel, Rgb& color);
     Rgb colorFromPalette(u8 palette, u8 pixel);
 
     Cartridge* cartridge_ = nullptr;
+    bool scanlineStartEnabled_ = false;
     bool ppuFetchNotificationsEnabled_ = false;
+    PpuFetchKind lastPpuFetchKind_ = PpuFetchKind::Nametable;
     Framebuffer framebuffer_{};
     Framebuffer renderFramebuffer_{};
     std::array<u8, 2048> nametable_{};
