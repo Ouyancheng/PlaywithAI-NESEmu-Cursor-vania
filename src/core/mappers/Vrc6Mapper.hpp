@@ -6,6 +6,7 @@
 
 namespace nes {
 
+// Konami VRC6 mapper: PRG/CHR banking, IRQs, PRG-RAM, and expansion pulse/saw audio.
 class Vrc6Mapper final : public Mapper {
 public:
     Vrc6Mapper(int prgBanks, int chrBanks, Mirroring defaultMirroring, bool swapAddressLines);
@@ -62,6 +63,7 @@ private:
     Pulse pulse_[2];
     Saw saw_;
 
+    // Decode VRC6 audio and PPU banking registers. Mapper 26 swaps address lines A0/A1.
     void writePulseRegister(Pulse& pulse, u16 reg, u8 data);
     u8 patternRegisterForAddress(u16 address) const;
     bool patternUsesAddressLsb(u16 address) const;

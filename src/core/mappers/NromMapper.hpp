@@ -4,6 +4,7 @@
 
 namespace nes {
 
+// Mapper 0: fixed PRG mapping and direct CHR access, used by simple early games.
 class NromMapper final : public Mapper {
 public:
     NromMapper(int prgBanks, int chrBanks, Mirroring mirroring);

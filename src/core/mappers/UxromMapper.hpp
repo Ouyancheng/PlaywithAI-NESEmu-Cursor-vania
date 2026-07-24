@@ -4,6 +4,7 @@
 
 namespace nes {
 
+// Mapper 2: switchable 16 KB PRG bank at $8000 and fixed last bank at $C000.
 class UxromMapper final : public Mapper {
 public:
     UxromMapper(int prgBanks, int chrBanks, Mirroring mirroring);

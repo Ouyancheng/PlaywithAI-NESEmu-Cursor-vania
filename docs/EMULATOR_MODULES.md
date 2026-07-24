@@ -107,7 +107,7 @@ Important implemented areas:
 - Odd-frame cycle skip when rendering is enabled.
 - Back-buffered rendering: pixels are drawn into `renderFramebuffer_`, then copied to `framebuffer_` at vblank.
 
-The PPU renders into a back buffer because frontend code should only see complete frames. The GUI additionally takes a locked snapshot to avoid reading while the core is publishing a frame.
+The PPU renders into a back buffer because frontend code should only see complete frames.
 
 ## APU
 
@@ -124,7 +124,7 @@ The APU generates NES audio samples. It currently models:
 - Frame counter timing for quarter-frame and half-frame updates.
 - DMC sample fetching, output level stepping, looping, IRQ status, and TND mixer contribution.
 - Nonlinear NES-style channel mixing.
-- A low-cut DC blocker plus high-frequency-preserving 18 kHz low-pass output stage, with conservative gain balancing to avoid clipping.
+- A low-cut DC blocker and conservative gain balancing to reduce quiet-state pops while preserving high-frequency detail.
 - Expansion audio input from mappers such as VRC6.
 
 Audio is clocked once per CPU cycle, not once per PPU cycle. DMC sample fetches are routed through the CPU bus address space so ROM sample data can come from the active cartridge mapping.
@@ -259,7 +259,7 @@ The app shell uses:
 - MetalKit for nearest-neighbor video presentation.
 - CoreAudio AudioQueue for sound output.
 
-The frontend runs emulation through an `NSTimer` and renders through `MTKView`. Video upload uses `Nes::framebufferSnapshot()` so Metal never reads from a framebuffer while the emulator is mutating it. AudioQueue output keeps a FIFO of generated samples; if the callback underruns, it ramps from the previous sample when audio resumes instead of jumping abruptly.
+The frontend uses `MTKView` as the display-linked pacing point. Each draw advances one emulator frame, pushes generated samples to AudioQueue, uploads the completed framebuffer, and presents through Metal. AudioQueue output uses a fixed ring buffer; if the callback underruns, it ramps from the previous sample when audio resumes instead of jumping abruptly.
 
 ## Win32 Frontend
 

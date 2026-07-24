@@ -15,8 +15,10 @@ enum class Button : u8 {
     Right,
 };
 
+// NES controller shift register. The frontend updates state_, then CPU reads serial bits.
 class Controller {
 public:
+    // Set or clear one physical button in the latched controller state.
     void set(Button button, bool pressed) {
         const u8 bit = static_cast<u8>(button);
         if (pressed) {
@@ -26,6 +28,7 @@ public:
         }
     }
 
+    // Writes to $4016 control whether reads return live A-button state or shift latched bits.
     void strobe(u8 value) {
         strobe_ = (value & 1u) != 0;
         if (strobe_) {
@@ -33,6 +36,7 @@ public:
         }
     }
 
+    // Return one controller bit in the NES register format, then advance the shift register.
     u8 read() {
         if (strobe_) {
             return static_cast<u8>(0x40 | (state_ & 1u));

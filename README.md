@@ -49,6 +49,7 @@ The Win32 frontend cannot be run directly on macOS without a compatibility layer
 
 ## Documentation
 
+- [Architecture and Algorithms](docs/ARCHITECTURE_AND_ALGORITHMS.md): reviewer-oriented overview of component responsibilities and core algorithms.
 - [Emulator Modules](docs/EMULATOR_MODULES.md): architecture and module-by-module explanation.
 - [Debugging Journey](docs/DEBUGGING_JOURNEY.md): symptom-to-fix log from the Super Mario and Akumajou Densetsu compatibility work.
 
@@ -62,7 +63,7 @@ Implemented:
 - PPU register model, loopy scroll timing, nametable/palette memory, scanline timing, vblank/NMI, background fetch shifters, sprite rendering, sprite-zero hit, and double-buffered frame publishing.
 - APU pulse, triangle, noise, and DMC sample generation with CoreAudio playback and VRC6 expansion audio mixing.
 - Mappers: NROM, MMC1, UxROM, MMC3, MMC5, Konami VRC6a, and Konami VRC6b.
-- Native macOS GUI with ROM picker, Metal display, keyboard input, reset, audio lifecycle, and locked framebuffer snapshots for stable presentation.
+- Native macOS GUI with ROM picker, display-linked Metal presentation, keyboard input, reset, and AudioQueue playback.
 
 Compatibility work that still needs test-ROM-driven iteration:
 

@@ -6,6 +6,7 @@
 
 namespace nes {
 
+// Mapper 4: banked PRG/CHR mapper with scanline IRQs used by many later NES games.
 class Mmc3Mapper final : public Mapper {
 public:
     Mmc3Mapper(int prgBanks, int chrBanks, Mirroring defaultMirroring);
@@ -15,6 +16,7 @@ public:
     bool ppuMapRead(u16 address, u32& mapped, u8& data) override;
     bool ppuMapWrite(u16 address, u32& mapped, u8 data) override;
     void reset() override;
+    // Clock the MMC3 IRQ counter once per visible scanline notification.
     void scanline() override;
     bool irqPending() const override { return irqPending_; }
     void clearIrq() override { irqPending_ = false; }

@@ -6,6 +6,7 @@
 
 namespace nes {
 
+// Mapper 5: MMC5 banking, ExRAM/fill nametables, scanline IRQs, WRAM, and expansion audio.
 class Mmc5Mapper final : public Mapper {
 public:
     Mmc5Mapper(int prgBanks, int chrBanks, Mirroring defaultMirroring);
@@ -17,8 +18,10 @@ public:
     void reset() override;
     void clockCpu() override;
     void scanline() override {}
+    // MMC5 scanline IRQs need an early scanline notification instead of MMC3-style end hooks.
     bool usesScanlineStart() const override { return true; }
     void scanlineStart(int scanline) override;
+    // MMC5 selects different CHR registers for background and sprite pattern fetches.
     bool usesPpuFetchNotifications() const override { return true; }
     void notifyPpuFetch(PpuFetchKind kind) override { fetchKind_ = kind; }
     bool irqPending() const override { return irqEnabled_ && irqPending_; }
@@ -27,6 +30,7 @@ public:
     Mirroring mirroring() const override;
 
 private:
+    // Simplified MMC5 pulse channel used for expansion audio mixing.
     struct Pulse {
         u8 volume = 0;
         u8 duty = 0;
@@ -72,6 +76,7 @@ private:
     bool pcmIrqEnabled_ = false;
     bool pcmIrqPending_ = false;
 
+    // Helpers below keep PRG/CHR/nametable banking rules readable in the mapping methods.
     bool wramWriteEnabled() const;
     u8 readWram(u8 bank, u16 offset) const;
     void writeWram(u8 bank, u16 offset, u8 data);

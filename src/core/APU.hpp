@@ -9,15 +9,23 @@ namespace nes {
 
 class APU {
 public:
+    // Reset channel registers, frame counter state, filters, and pending sample output.
     void reset();
+    // Advance APU timers by one CPU cycle and emit samples at the configured output rate.
     void clock();
+    // CPU-facing write for APU registers $4000-$4017.
     void cpuWrite(u16 address, u8 data);
+    // CPU-facing status read, primarily $4015 channel/IRQ state.
     u8 cpuRead(u16 address);
+    // Callback used by the DMC channel to fetch sample bytes through CPU address space.
     void setDmcReader(std::function<u8(u16)> reader);
+    // Mapper expansion audio level mixed into the next output sample.
     void setExpansionAudio(u8 level);
+    // Move accumulated floating-point samples to the frontend audio backend.
     std::vector<float> takeSamples();
 
 private:
+    // Pulse channel state: envelope, sweep, length counter, timer, and waveform phase.
     struct Pulse {
         u8 duty = 0;
         u8 volume = 0;
@@ -39,12 +47,18 @@ private:
         u8 sweepShift = 0;
     };
 
+    // Quarter-frame clocks envelopes and the triangle linear counter.
     void quarterFrame();
+    // Half-frame clocks length counters and pulse sweep units.
     void halfFrame();
+    // Calculate the pulse sweep target period without mutating channel state.
     u16 pulseSweepTarget(const Pulse& pulse, int channel) const;
     void clockPulseSweep(Pulse& pulse, int channel);
+    // Advance the DMC output unit and refill its sample buffer when needed.
     void clockDmc();
+    // Restart DMC playback from the programmed address/length registers.
     void restartDmcSample();
+    // Mix all channels, apply the DC blocker, and return one normalized sample.
     float nextSample();
 
     Pulse pulse_[2];
