@@ -93,7 +93,6 @@ private:
     double sampleClock_ = 0.0;
     float dcBlockPrevInput_ = 0.0f;
     float dcBlockPrevOutput_ = 0.0f;
-    float lowPassOutput_ = 0.0f;
     u8 expansionLevel_ = 0;
     std::vector<float> samples_;
 };

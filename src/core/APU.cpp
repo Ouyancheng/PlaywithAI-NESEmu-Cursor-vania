@@ -67,7 +67,6 @@ void APU::reset() {
     sampleClock_ = 0.0;
     dcBlockPrevInput_ = 0.0f;
     dcBlockPrevOutput_ = 0.0f;
-    lowPassOutput_ = 0.0f;
     expansionLevel_ = 0;
     samples_.clear();
 }
@@ -276,20 +275,18 @@ float APU::nextSample() {
     const float dmcOut = static_cast<float>(dmcOutputLevel_);
     const float tndDenominator = triangleOut / 8227.0f + noiseOut / 12241.0f + dmcOut / 22638.0f;
     const float tndOut = tndDenominator > 0.0f ? 159.79f / ((1.0f / tndDenominator) + 100.0f) : 0.0f;
-    const float expansionOut = static_cast<float>(expansionLevel_) / 128.0f;
-    const float mixed = (pulseOut + tndOut + expansionOut) * 1.18f;
+    const float expansionOut = static_cast<float>(expansionLevel_) / 96.0f;
+    const float mixed = (pulseOut + tndOut + expansionOut) * 1.05f;
 
     constexpr float sampleRate = 44100.0f;
     constexpr float pi = 3.14159265358979323846f;
     const float dc = std::exp(-2.0f * pi * 20.0f / sampleRate);
-    const float lp18k = 1.0f - std::exp(-2.0f * pi * 18000.0f / sampleRate);
 
     const float dcBlocked = dc * (dcBlockPrevOutput_ + mixed - dcBlockPrevInput_);
     dcBlockPrevInput_ = mixed;
     dcBlockPrevOutput_ = dcBlocked;
 
-    lowPassOutput_ += lp18k * (dcBlocked - lowPassOutput_);
-    return std::clamp(lowPassOutput_, -1.0f, 1.0f);
+    return std::clamp(dcBlocked, -1.0f, 1.0f);
 }
 
 void APU::quarterFrame() {
