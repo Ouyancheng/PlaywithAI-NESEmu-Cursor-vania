@@ -277,6 +277,95 @@ void runUxromBankSwitchAndChrRamSmokeTest() {
     assert(data == 0x7b);
 }
 
+void runMmc5SmokeTest() {
+    nes::Cartridge::Header header;
+    header.mapper = 5;
+    header.prgBanks = 4;
+    header.chrBanks = 16;
+    header.mirroring = nes::Mirroring::Vertical;
+
+    std::vector<nes::u8> prg(header.prgBanks * 16 * 1024);
+    for (int bank = 0; bank < header.prgBanks * 2; ++bank) {
+        prg[bank * 0x2000] = static_cast<nes::u8>(0x80 + bank);
+    }
+    std::vector<nes::u8> chr(header.chrBanks * 8 * 1024);
+    chr[3 * 0x400] = 0x33;
+    chr[4 * 0x400] = 0x44;
+    chr[0x43 * 0x400] = 0x43;
+    nes::Cartridge cartridge(header, std::move(prg), std::move(chr));
+
+    nes::u8 data = 0;
+    assert(cartridge.mapperName() == "MMC5");
+
+    cartridge.cpuWrite(0x5100, 0x03);
+    cartridge.cpuWrite(0x5114, 0x82);
+    assert(cartridge.cpuRead(0x8000, data));
+    assert(data == 0x82);
+    assert(cartridge.cpuRead(0xe000, data));
+    assert(data == 0x87);
+
+    cartridge.cpuWrite(0x5100, 0x00);
+    cartridge.cpuWrite(0x5117, 0x84);
+    assert(cartridge.cpuRead(0x8000, data));
+    assert(data == 0x84);
+
+    cartridge.cpuWrite(0x6000, 0x12);
+    assert(cartridge.cpuRead(0x6000, data));
+    assert(data == 0x00);
+    cartridge.cpuWrite(0x5102, 0x02);
+    cartridge.cpuWrite(0x5103, 0x01);
+    cartridge.cpuWrite(0x6000, 0x34);
+    assert(cartridge.cpuRead(0x6000, data));
+    assert(data == 0x34);
+
+    cartridge.cpuWrite(0x5101, 0x03);
+    cartridge.cpuWrite(0x5123, 0x03);
+    assert(cartridge.ppuRead(0x0c00, data));
+    assert(data == 0x33);
+    cartridge.cpuWrite(0x512b, 0x43);
+    cartridge.notifyPpuFetch(nes::PpuFetchKind::BackgroundPattern);
+    assert(cartridge.ppuRead(0x0c00, data));
+    assert(data == 0x43);
+    cartridge.notifyPpuFetch(nes::PpuFetchKind::SpritePattern);
+
+    cartridge.cpuWrite(0x5105, 0x02);
+    assert(cartridge.ppuWrite(0x2005, 0x6a));
+    assert(cartridge.cpuRead(0x5c05, data));
+    assert(data == 0x6a);
+    cartridge.cpuWrite(0x5105, 0x03);
+    cartridge.cpuWrite(0x5106, 0x77);
+    cartridge.cpuWrite(0x5107, 0x02);
+    assert(cartridge.ppuRead(0x2000, data));
+    assert(data == 0x77);
+    assert(cartridge.ppuRead(0x23c0, data));
+    assert(data == 0x02);
+
+    cartridge.cpuWrite(0x5205, 9);
+    cartridge.cpuWrite(0x5206, 7);
+    assert(cartridge.cpuRead(0x5205, data));
+    assert(data == 63);
+    assert(cartridge.cpuRead(0x5206, data));
+    assert(data == 0);
+
+    cartridge.cpuWrite(0x5203, 3);
+    cartridge.cpuWrite(0x5204, 0x80);
+    cartridge.scanlineStart(2);
+    assert(!cartridge.irqPending());
+    cartridge.scanlineStart(3);
+    assert(cartridge.irqPending());
+    assert(cartridge.cpuRead(0x5204, data));
+    assert((data & 0x80) != 0);
+    assert(!cartridge.irqPending());
+
+    cartridge.cpuWrite(0x5000, 0xcf);
+    cartridge.cpuWrite(0x5002, 0x01);
+    cartridge.cpuWrite(0x5003, 0x00);
+    cartridge.cpuWrite(0x5015, 0x01);
+    assert(cartridge.expansionAudioSample() > 0);
+    cartridge.cpuWrite(0x5011, 0x40);
+    assert(cartridge.expansionAudioSample() > 0);
+}
+
 void runVrc6MirroringSmokeTest() {
     nes::Cartridge::Header header;
     header.mapper = 24;
@@ -413,6 +502,7 @@ int main() {
     runMmc1PrgRamAndLargeBankSmokeTest();
     runMmc3PrgRamAndMirroringSmokeTest();
     runUxromBankSwitchAndChrRamSmokeTest();
+    runMmc5SmokeTest();
     runVrc6MirroringSmokeTest();
     runVrc6PatternBankingStyleSmokeTest();
     runVrc6RomNametableSmokeTest();

@@ -136,7 +136,7 @@ bool Vrc6Mapper::cpuMapWrite(u16 address, u32& mapped, u8 data) {
     return false;
 }
 
-bool Vrc6Mapper::ppuMapRead(u16 address, u32& mapped) {
+bool Vrc6Mapper::ppuMapRead(u16 address, u32& mapped, u8&) {
     const bool romNametables = (ppuBankingMode_ & 0x10) != 0;
     if (address < 0x2000) {
         mapped = mappedChrAddress(patternRegisterForAddress(address), address, false, 0, patternUsesAddressLsb(address));
@@ -152,7 +152,7 @@ bool Vrc6Mapper::ppuMapRead(u16 address, u32& mapped) {
     return false;
 }
 
-bool Vrc6Mapper::ppuMapWrite(u16 address, u32& mapped) {
+bool Vrc6Mapper::ppuMapWrite(u16 address, u32& mapped, u8) {
     const bool romNametables = (ppuBankingMode_ & 0x10) != 0;
     if (address >= 0x2000 && !romNametables) {
         return false;

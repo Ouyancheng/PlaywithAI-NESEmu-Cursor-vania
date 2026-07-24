@@ -19,6 +19,7 @@ add_library(nes_core
     src/core/PPU.cpp
     src/core/mappers/Mmc1Mapper.cpp
     src/core/mappers/Mmc3Mapper.cpp
+    src/core/mappers/Mmc5Mapper.cpp
     src/core/mappers/NromMapper.cpp
     src/core/mappers/UxromMapper.cpp
     src/core/mappers/Vrc6Mapper.cpp

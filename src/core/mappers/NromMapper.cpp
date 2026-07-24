@@ -21,7 +21,7 @@ bool NromMapper::cpuMapWrite(u16 address, u32& mapped, u8) {
     return true;
 }
 
-bool NromMapper::ppuMapRead(u16 address, u32& mapped) {
+bool NromMapper::ppuMapRead(u16 address, u32& mapped, u8&) {
     if (address >= 0x2000) {
         return false;
     }
@@ -29,7 +29,7 @@ bool NromMapper::ppuMapRead(u16 address, u32& mapped) {
     return true;
 }
 
-bool NromMapper::ppuMapWrite(u16 address, u32& mapped) {
+bool NromMapper::ppuMapWrite(u16 address, u32& mapped, u8) {
     if (address >= 0x2000 || chrBanks_ != 0) {
         return false;
     }

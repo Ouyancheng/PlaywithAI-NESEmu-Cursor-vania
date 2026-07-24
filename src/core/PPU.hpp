@@ -9,7 +9,7 @@ namespace nes {
 
 class PPU {
 public:
-    void connect(Cartridge* cartridge) { cartridge_ = cartridge; }
+    void connect(Cartridge* cartridge);
     void reset();
     void clock();
 
@@ -41,6 +41,7 @@ private:
     Rgb colorFromPalette(u8 palette, u8 pixel);
 
     Cartridge* cartridge_ = nullptr;
+    bool ppuFetchNotificationsEnabled_ = false;
     Framebuffer framebuffer_{};
     Framebuffer renderFramebuffer_{};
     std::array<u8, 2048> nametable_{};

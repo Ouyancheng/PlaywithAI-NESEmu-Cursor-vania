@@ -30,6 +30,9 @@ public:
     void reset();
     void clockCpu();
     void scanline();
+    void scanlineStart(int scanline);
+    bool usesPpuFetchNotifications() const;
+    void notifyPpuFetch(PpuFetchKind kind);
     bool irqPending() const;
     void clearIrq();
     u8 expansionAudioSample();

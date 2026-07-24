@@ -33,7 +33,7 @@ bool UxromMapper::cpuMapWrite(u16 address, u32&, u8 data) {
     return false;
 }
 
-bool UxromMapper::ppuMapRead(u16 address, u32& mapped) {
+bool UxromMapper::ppuMapRead(u16 address, u32& mapped, u8&) {
     if (address >= 0x2000) {
         return false;
     }
@@ -41,7 +41,7 @@ bool UxromMapper::ppuMapRead(u16 address, u32& mapped) {
     return true;
 }
 
-bool UxromMapper::ppuMapWrite(u16 address, u32& mapped) {
+bool UxromMapper::ppuMapWrite(u16 address, u32& mapped, u8) {
     if (address >= 0x2000 || chrBanks_ != 0) {
         return false;
     }

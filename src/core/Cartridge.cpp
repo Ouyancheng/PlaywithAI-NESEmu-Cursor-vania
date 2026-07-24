@@ -2,6 +2,7 @@
 
 #include "mappers/Mmc1Mapper.hpp"
 #include "mappers/Mmc3Mapper.hpp"
+#include "mappers/Mmc5Mapper.hpp"
 #include "mappers/NromMapper.hpp"
 #include "mappers/UxromMapper.hpp"
 #include "mappers/Vrc6Mapper.hpp"
@@ -23,6 +24,8 @@ std::unique_ptr<Mapper> makeMapper(const Cartridge::Header& header) {
         return std::make_unique<UxromMapper>(header.prgBanks, header.chrBanks, header.mirroring);
     case 4:
         return std::make_unique<Mmc3Mapper>(header.prgBanks, header.chrBanks, header.mirroring);
+    case 5:
+        return std::make_unique<Mmc5Mapper>(header.prgBanks, header.chrBanks, header.mirroring);
     case 24:
         return std::make_unique<Vrc6Mapper>(header.prgBanks, header.chrBanks, header.mirroring, false);
     case 26:
@@ -117,8 +120,10 @@ bool Cartridge::ppuRead(u16 address, u8& data) {
         return false;
     }
     u32 mapped = 0;
-    if (mapper_->ppuMapRead(address, mapped)) {
-        data = chr_[mapped % chr_.size()];
+    if (mapper_->ppuMapRead(address, mapped, data)) {
+        if (mapped != kMapperHandled) {
+            data = chr_[mapped % chr_.size()];
+        }
         return true;
     }
     return false;
@@ -129,7 +134,7 @@ bool Cartridge::ppuWrite(u16 address, u8 data) {
         return false;
     }
     u32 mapped = 0;
-    if (mapper_->ppuMapWrite(address, mapped)) {
+    if (mapper_->ppuMapWrite(address, mapped, data)) {
         if (mapped != kMapperHandled) {
             chr_[mapped % chr_.size()] = data;
         }
@@ -153,6 +158,22 @@ void Cartridge::clockCpu() {
 void Cartridge::scanline() {
     if (mapper_) {
         mapper_->scanline();
+    }
+}
+
+void Cartridge::scanlineStart(int scanline) {
+    if (mapper_) {
+        mapper_->scanlineStart(scanline);
+    }
+}
+
+bool Cartridge::usesPpuFetchNotifications() const {
+    return mapper_ && mapper_->usesPpuFetchNotifications();
+}
+
+void Cartridge::notifyPpuFetch(PpuFetchKind kind) {
+    if (mapper_) {
+        mapper_->notifyPpuFetch(kind);
     }
 }
 
@@ -180,6 +201,7 @@ std::string Cartridge::mapperName() const {
     case 1: return "MMC1";
     case 2: return "UxROM";
     case 4: return "MMC3";
+    case 5: return "MMC5";
     case 24:
     case 26: return "Konami VRC6";
     default: return "Unsupported";

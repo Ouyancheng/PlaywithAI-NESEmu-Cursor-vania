@@ -153,6 +153,7 @@ Supported mappers:
 - Mapper 1: MMC1
 - Mapper 2: UxROM
 - Mapper 4: MMC3
+- Mapper 5: MMC5
 - Mapper 24: Konami VRC6a
 - Mapper 26: Konami VRC6b
 
@@ -207,6 +208,15 @@ Files:
 - `src/core/mappers/Mmc3Mapper.cpp`
 
 MMC3 provides banked PRG/CHR mapping and IRQ behavior tied to PPU A12 activity. It is required by many later NES games.
+
+## MMC5
+
+Files:
+
+- `src/core/mappers/Mmc5Mapper.hpp`
+- `src/core/mappers/Mmc5Mapper.cpp`
+
+MMC5 is Nintendo's most advanced mapper. The game-first implementation covers PRG/CHR banking modes, PRG-RAM write protection, ExRAM CPU access, mapper-controlled nametable/fill reads, multiplier registers, scanline IRQ smoke behavior, and basic expansion audio. Exact split-screen and extended-attribute timing remain follow-up conformance work.
 
 ## VRC6
 
@@ -282,6 +292,7 @@ The tests are focused smoke and regression tests. They cover:
 - PPU frame completion.
 - OAM DMA.
 - UxROM PRG bank switching and CHR-RAM.
+- MMC5 PRG/CHR banking, PRG-RAM protection, ExRAM, fill-mode nametable reads, multiplier, IRQ, and basic expansion audio smoke checks.
 - VRC6 mirroring, PRG-RAM, Mapper 26 address-line swap, pattern-bank smoke checks, ROM nametable smoke checks, and IRQ behavior.
 
 These tests are not a substitute for full public NES test ROM suites, but they protect the bugs discovered during development.

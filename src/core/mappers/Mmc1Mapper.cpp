@@ -104,7 +104,7 @@ bool Mmc1Mapper::cpuMapWrite(u16 address, u32& mapped, u8 data) {
     return false;
 }
 
-bool Mmc1Mapper::ppuMapRead(u16 address, u32& mapped) {
+bool Mmc1Mapper::ppuMapRead(u16 address, u32& mapped, u8&) {
     if (address >= 0x2000) {
         return false;
     }
@@ -123,7 +123,7 @@ bool Mmc1Mapper::ppuMapRead(u16 address, u32& mapped) {
     return true;
 }
 
-bool Mmc1Mapper::ppuMapWrite(u16 address, u32& mapped) {
+bool Mmc1Mapper::ppuMapWrite(u16 address, u32& mapped, u8) {
     if (address >= 0x2000 || chrBanks_ != 0) {
         return false;
     }

@@ -10,8 +10,8 @@ public:
 
     bool cpuMapRead(u16 address, u32& mapped, u8& data) override;
     bool cpuMapWrite(u16 address, u32& mapped, u8 data) override;
-    bool ppuMapRead(u16 address, u32& mapped) override;
-    bool ppuMapWrite(u16 address, u32& mapped) override;
+    bool ppuMapRead(u16 address, u32& mapped, u8& data) override;
+    bool ppuMapWrite(u16 address, u32& mapped, u8 data) override;
     void reset() override;
     Mirroring mirroring() const override { return mirroring_; }
 
