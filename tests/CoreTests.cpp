@@ -174,6 +174,109 @@ void runApuDmcFetchSmokeTest() {
     assert((apu.cpuRead(0x4015) & 0x90) == 0x80);
 }
 
+void writeMmc1Register(nes::Cartridge& cartridge, nes::u16 address, nes::u8 value) {
+    for (int i = 0; i < 5; ++i) {
+        cartridge.cpuWrite(address, static_cast<nes::u8>((value >> i) & 1));
+    }
+}
+
+void runMmc1PrgRamAndLargeBankSmokeTest() {
+    nes::Cartridge::Header header;
+    header.mapper = 1;
+    header.prgBanks = 32;
+    header.chrBanks = 0;
+
+    std::vector<nes::u8> prg(header.prgBanks * 16 * 1024);
+    prg[15 * 0x4000] = 0x15;
+    prg[31 * 0x4000] = 0x31;
+    nes::Cartridge cartridge(header, std::move(prg), std::vector<nes::u8>(8192));
+
+    nes::u8 data = 0;
+    cartridge.cpuWrite(0x6002, 0x5a);
+    assert(cartridge.cpuRead(0x6002, data));
+    assert(data == 0x5a);
+
+    writeMmc1Register(cartridge, 0xe000, 0x10);
+    assert(cartridge.cpuRead(0x6002, data));
+    assert(data == 0xff);
+    cartridge.cpuWrite(0x6002, 0x33);
+    writeMmc1Register(cartridge, 0xe000, 0x00);
+    assert(cartridge.cpuRead(0x6002, data));
+    assert(data == 0x5a);
+
+    assert(cartridge.cpuRead(0xc000, data));
+    assert(data == 0x15);
+    writeMmc1Register(cartridge, 0xa000, 0x10);
+    assert(cartridge.cpuRead(0xc000, data));
+    assert(data == 0x31);
+}
+
+void runMmc3PrgRamAndMirroringSmokeTest() {
+    nes::Cartridge::Header header;
+    header.mapper = 4;
+    header.prgBanks = 4;
+    header.chrBanks = 1;
+    header.mirroring = nes::Mirroring::Vertical;
+    nes::Cartridge cartridge(header, std::vector<nes::u8>(header.prgBanks * 16 * 1024), std::vector<nes::u8>(8192));
+
+    nes::u8 data = 0;
+    cartridge.cpuWrite(0x6000, 0x66);
+    assert(cartridge.cpuRead(0x6000, data));
+    assert(data == 0x66);
+
+    cartridge.cpuWrite(0xa001, 0xc0);
+    cartridge.cpuWrite(0x6000, 0x77);
+    assert(cartridge.cpuRead(0x6000, data));
+    assert(data == 0x66);
+
+    cartridge.cpuWrite(0xa001, 0x00);
+    assert(cartridge.cpuRead(0x6000, data));
+    assert(data == 0xff);
+    cartridge.cpuWrite(0xa001, 0x80);
+    assert(cartridge.cpuRead(0x6000, data));
+    assert(data == 0x66);
+
+    cartridge.cpuWrite(0xa000, 0x01);
+    assert(cartridge.mirroring() == nes::Mirroring::Horizontal);
+
+    header.mirroring = nes::Mirroring::FourScreen;
+    nes::Cartridge fourScreen(header, std::vector<nes::u8>(header.prgBanks * 16 * 1024), std::vector<nes::u8>(8192));
+    fourScreen.cpuWrite(0xa000, 0x01);
+    assert(fourScreen.mirroring() == nes::Mirroring::FourScreen);
+}
+
+void runUxromBankSwitchAndChrRamSmokeTest() {
+    nes::Cartridge::Header header;
+    header.mapper = 2;
+    header.prgBanks = 4;
+    header.chrBanks = 0;
+    header.mirroring = nes::Mirroring::Vertical;
+
+    std::vector<nes::u8> prg(header.prgBanks * 16 * 1024);
+    prg[0 * 0x4000] = 0x10;
+    prg[2 * 0x4000] = 0x32;
+    prg[3 * 0x4000] = 0xff;
+    nes::Cartridge cartridge(header, std::move(prg), std::vector<nes::u8>(8192));
+
+    nes::u8 data = 0;
+    assert(cartridge.mapperName() == "UxROM");
+    assert(cartridge.mirroring() == nes::Mirroring::Vertical);
+    assert(cartridge.cpuRead(0x8000, data));
+    assert(data == 0x10);
+    assert(cartridge.cpuRead(0xc000, data));
+    assert(data == 0xff);
+
+    cartridge.cpuWrite(0x8000, 0x02);
+    assert(cartridge.cpuRead(0x8000, data));
+    assert(data == 0x32);
+    assert(cartridge.cpuRead(0xc000, data));
+    assert(data == 0xff);
+
+    assert(cartridge.ppuWrite(0x0010, 0x7b));
+    assert(cartridge.ppuRead(0x0010, data));
+    assert(data == 0x7b);
+}
+
 void runVrc6MirroringSmokeTest() {
     nes::Cartridge::Header header;
     header.mapper = 24;
@@ -307,6 +410,9 @@ int main() {
     runOamDmaSmokeTest();
     runApuFrameCounterSmokeTest();
     runApuDmcFetchSmokeTest();
+    runMmc1PrgRamAndLargeBankSmokeTest();
+    runMmc3PrgRamAndMirroringSmokeTest();
+    runUxromBankSwitchAndChrRamSmokeTest();
     runVrc6MirroringSmokeTest();
     runVrc6PatternBankingStyleSmokeTest();
     runVrc6RomNametableSmokeTest();

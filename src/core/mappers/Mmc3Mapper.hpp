@@ -25,6 +25,10 @@ private:
     int prgBanks_ = 0;
     int chrBanks_ = 0;
     Mirroring mirroring_ = Mirroring::Horizontal;
+    std::array<u8, 8192> prgRam_{};
+    bool fixedMirroring_ = false;
+    bool prgRamEnabled_ = true;
+    bool prgRamWriteEnabled_ = true;
     u8 bankSelect_ = 0;
     u8 irqLatch_ = 0;
     u8 irqCounter_ = 0;

@@ -3,6 +3,7 @@
 #include "mappers/Mmc1Mapper.hpp"
 #include "mappers/Mmc3Mapper.hpp"
 #include "mappers/NromMapper.hpp"
+#include "mappers/UxromMapper.hpp"
 #include "mappers/Vrc6Mapper.hpp"
 
 #include <fstream>
@@ -18,6 +19,8 @@ std::unique_ptr<Mapper> makeMapper(const Cartridge::Header& header) {
         return std::make_unique<NromMapper>(header.prgBanks, header.chrBanks, header.mirroring);
     case 1:
         return std::make_unique<Mmc1Mapper>(header.prgBanks, header.chrBanks, header.mirroring);
+    case 2:
+        return std::make_unique<UxromMapper>(header.prgBanks, header.chrBanks, header.mirroring);
     case 4:
         return std::make_unique<Mmc3Mapper>(header.prgBanks, header.chrBanks, header.mirroring);
     case 24:
@@ -175,6 +178,7 @@ std::string Cartridge::mapperName() const {
     switch (header_.mapper) {
     case 0: return "NROM";
     case 1: return "MMC1";
+    case 2: return "UxROM";
     case 4: return "MMC3";
     case 24:
     case 26: return "Konami VRC6";

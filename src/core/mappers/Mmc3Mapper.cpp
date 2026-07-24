@@ -5,12 +5,17 @@
 namespace nes {
 
 Mmc3Mapper::Mmc3Mapper(int prgBanks, int chrBanks, Mirroring defaultMirroring)
-    : prgBanks_(prgBanks), chrBanks_(chrBanks), mirroring_(defaultMirroring) {
+    : prgBanks_(prgBanks),
+      chrBanks_(chrBanks),
+      mirroring_(defaultMirroring),
+      fixedMirroring_(defaultMirroring == Mirroring::FourScreen) {
     reset();
 }
 
 void Mmc3Mapper::reset() {
     regs_.fill(0);
+    prgRamEnabled_ = true;
+    prgRamWriteEnabled_ = true;
     bankSelect_ = 0;
     irqLatch_ = 0;
     irqCounter_ = 0;
@@ -21,7 +26,12 @@ void Mmc3Mapper::reset() {
     chrMode_ = false;
 }
 
-bool Mmc3Mapper::cpuMapRead(u16 address, u32& mapped, u8&) {
+bool Mmc3Mapper::cpuMapRead(u16 address, u32& mapped, u8& data) {
+    if (address >= 0x6000 && address <= 0x7fff) {
+        data = prgRamEnabled_ ? prgRam_[address & 0x1fff] : 0xff;
+        mapped = kMapperHandled;
+        return true;
+    }
     if (address < 0x8000) {
         return false;
     }
@@ -41,7 +51,14 @@ bool Mmc3Mapper::cpuMapRead(u16 address, u32& mapped, u8&) {
     return true;
 }
 
-bool Mmc3Mapper::cpuMapWrite(u16 address, u32&, u8 data) {
+bool Mmc3Mapper::cpuMapWrite(u16 address, u32& mapped, u8 data) {
+    if (address >= 0x6000 && address <= 0x7fff) {
+        if (prgRamEnabled_ && prgRamWriteEnabled_) {
+            prgRam_[address & 0x1fff] = data;
+        }
+        mapped = kMapperHandled;
+        return true;
+    }
     if (address < 0x8000) {
         return false;
     }
@@ -56,7 +73,12 @@ bool Mmc3Mapper::cpuMapWrite(u16 address, u32&, u8 data) {
         }
     } else if (address <= 0xbfff) {
         if (even) {
-            mirroring_ = (data & 1u) ? Mirroring::Horizontal : Mirroring::Vertical;
+            if (!fixedMirroring_) {
+                mirroring_ = (data & 1u) ? Mirroring::Horizontal : Mirroring::Vertical;
+            }
+        } else {
+            prgRamEnabled_ = (data & 0x80) != 0;
+            prgRamWriteEnabled_ = (data & 0x40) == 0;
         }
     } else if (address <= 0xdfff) {
         if (even) {

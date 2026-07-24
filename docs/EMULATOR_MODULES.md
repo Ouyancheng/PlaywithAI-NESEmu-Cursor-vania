@@ -151,6 +151,7 @@ Supported mappers:
 
 - Mapper 0: NROM
 - Mapper 1: MMC1
+- Mapper 2: UxROM
 - Mapper 4: MMC3
 - Mapper 24: Konami VRC6a
 - Mapper 26: Konami VRC6b
@@ -179,6 +180,15 @@ Files:
 - `src/core/mappers/NromMapper.cpp`
 
 NROM is the simplest mapper. It provides fixed PRG mapping and direct CHR access. It is useful for basic CPU, PPU, and bus validation.
+
+## UxROM
+
+Files:
+
+- `src/core/mappers/UxromMapper.hpp`
+- `src/core/mappers/UxromMapper.cpp`
+
+UxROM is Mapper 2, used by games such as the original NES Castlevania. It provides a switchable 16 KB PRG bank at `$8000-$BFFF`, fixes the last PRG bank at `$C000-$FFFF`, and commonly uses CHR-RAM for pattern data.
 
 ## MMC1
 
@@ -271,6 +281,7 @@ The tests are focused smoke and regression tests. They cover:
 - Cartridge loading.
 - PPU frame completion.
 - OAM DMA.
+- UxROM PRG bank switching and CHR-RAM.
 - VRC6 mirroring, PRG-RAM, Mapper 26 address-line swap, pattern-bank smoke checks, ROM nametable smoke checks, and IRQ behavior.
 
 These tests are not a substitute for full public NES test ROM suites, but they protect the bugs discovered during development.
