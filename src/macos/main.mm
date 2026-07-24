@@ -6,7 +6,7 @@
 
 #include "core/Nes.hpp"
 
-#include <deque>
+#include <array>
 #include <mutex>
 
 namespace {
@@ -49,13 +49,16 @@ public:
         queue_ = nullptr;
     }
 
-    void push(std::vector<float> samples) {
+    void push(const std::vector<float>& samples) {
         std::lock_guard<std::mutex> lock(mutex_);
         for (float sample : samples) {
-            fifo_.push_back(sample);
-        }
-        while (fifo_.size() > 44100) {
-            fifo_.pop_front();
+            if (fifoSize_ == fifo_.size()) {
+                fifoRead_ = (fifoRead_ + 1) % fifo_.size();
+                --fifoSize_;
+            }
+            fifo_[fifoWrite_] = sample;
+            fifoWrite_ = (fifoWrite_ + 1) % fifo_.size();
+            ++fifoSize_;
         }
     }
 
@@ -72,9 +75,10 @@ private:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             for (int i = 0; i < frames; ++i) {
-                if (!fifo_.empty()) {
-                    float sample = fifo_.front();
-                    fifo_.pop_front();
+                if (fifoSize_ > 0) {
+                    float sample = fifo_[fifoRead_];
+                    fifoRead_ = (fifoRead_ + 1) % fifo_.size();
+                    --fifoSize_;
                     if (underrunRecovery_ > 0) {
                         const float t = static_cast<float>(kRecoverySamples - underrunRecovery_ + 1) / static_cast<float>(kRecoverySamples);
                         sample = recoveryStart_ + (sample - recoveryStart_) * t;
@@ -96,7 +100,10 @@ private:
     AudioQueueRef queue_ = nullptr;
     AudioQueueBufferRef buffers_[3]{};
     std::mutex mutex_;
-    std::deque<float> fifo_;
+    std::array<float, 44100> fifo_{};
+    std::size_t fifoRead_ = 0;
+    std::size_t fifoWrite_ = 0;
+    std::size_t fifoSize_ = 0;
     float lastSample_ = 0.0f;
     static constexpr int kRecoverySamples = 64;
     int underrunRecovery_ = 0;
@@ -106,22 +113,24 @@ private:
 }
 
 @interface GameView : MTKView <MTKViewDelegate>
-- (instancetype)initWithFrame:(NSRect)frame emulator:(nes::Nes*)emulator;
+- (instancetype)initWithFrame:(NSRect)frame emulator:(nes::Nes*)emulator audio:(AudioQueuePlayer*)audio;
 - (void)uploadFrame;
 @end
 
 @implementation GameView {
     nes::Nes* _emulator;
+    AudioQueuePlayer* _audio;
     id<MTLCommandQueue> _commandQueue;
     id<MTLTexture> _texture;
     id<MTLRenderPipelineState> _pipeline;
     id<MTLSamplerState> _sampler;
 }
 
-- (instancetype)initWithFrame:(NSRect)frame emulator:(nes::Nes*)emulator {
+- (instancetype)initWithFrame:(NSRect)frame emulator:(nes::Nes*)emulator audio:(AudioQueuePlayer*)audio {
     self = [super initWithFrame:frame device:MTLCreateSystemDefaultDevice()];
     if (self) {
         _emulator = emulator;
+        _audio = audio;
         self.delegate = self;
         self.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
         self.framebufferOnly = NO;
@@ -194,7 +203,7 @@ private:
 }
 
 - (void)uploadFrame {
-    const auto fb = _emulator->framebufferSnapshot();
+    const auto& fb = _emulator->framebuffer();
     [_texture replaceRegion:MTLRegionMake2D(0, 0, nes::kScreenWidth, nes::kScreenHeight)
                 mipmapLevel:0
                   withBytes:fb.data()
@@ -204,6 +213,10 @@ private:
 - (void)drawInMTKView:(MTKView*)view {
     if (!_emulator || !_emulator->hasCartridge()) {
         return;
+    }
+    _emulator->stepFrame();
+    if (_audio) {
+        _audio->push(_emulator->takeAudioSamples());
     }
     [self uploadFrame];
     id<CAMetalDrawable> drawable = view.currentDrawable;
@@ -252,7 +265,6 @@ private:
 @implementation AppDelegate {
     NSWindow* _window;
     GameView* _view;
-    NSTimer* _timer;
     nes::Nes _emulator;
     AudioQueuePlayer _audio;
 }
@@ -267,18 +279,13 @@ private:
     _window.title = @"TestAiNES";
     _window.contentAspectRatio = NSMakeSize(nes::kScreenWidth, nes::kScreenHeight);
     _window.minSize = NSMakeSize(512, 480);
-    _view = [[GameView alloc] initWithFrame:frame emulator:&_emulator];
+    _view = [[GameView alloc] initWithFrame:frame emulator:&_emulator audio:&_audio];
     _window.contentView = _view;
     [_window center];
     [_window makeKeyAndOrderFront:nil];
     [_window makeFirstResponder:_view];
     [self buildMenu];
     _audio.start();
-    _timer = [NSTimer scheduledTimerWithTimeInterval:1.0 / static_cast<double>(nes::kFrameRateNtsc)
-                                             target:self
-                                           selector:@selector(stepFrame)
-                                           userInfo:nil
-                                            repeats:YES];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
@@ -288,7 +295,6 @@ private:
 
 - (void)applicationWillTerminate:(NSNotification*)notification {
     (void)notification;
-    [_timer invalidate];
     _audio.stop();
 }
 
@@ -327,14 +333,6 @@ private:
 - (void)resetEmulator:(id)sender {
     (void)sender;
     _emulator.reset();
-}
-
-- (void)stepFrame {
-    if (!_emulator.hasCartridge()) {
-        return;
-    }
-    _emulator.stepFrame();
-    _audio.push(_emulator.takeAudioSamples());
 }
 
 @end
