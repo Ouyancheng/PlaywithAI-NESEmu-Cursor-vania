@@ -16,7 +16,7 @@ using i16 = std::int16_t;
 constexpr int kScreenWidth = 256;
 constexpr int kScreenHeight = 240;
 constexpr int kCpuFrequencyNtsc = 1'789'773;
-constexpr int kFrameRateNtsc = 60;
+constexpr double kFrameRateNtsc = 60.0988138974405;
 
 struct Rgb {
     u8 r = 0;

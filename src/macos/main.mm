@@ -2,10 +2,12 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include "core/Nes.hpp"
 
+#include <algorithm>
 #include <array>
 #include <mutex>
 
@@ -124,6 +126,8 @@ private:
     id<MTLTexture> _texture;
     id<MTLRenderPipelineState> _pipeline;
     id<MTLSamplerState> _sampler;
+    CFTimeInterval _lastDrawTime;
+    double _frameAccumulator;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame emulator:(nes::Nes*)emulator audio:(AudioQueuePlayer*)audio {
@@ -131,12 +135,14 @@ private:
     if (self) {
         _emulator = emulator;
         _audio = audio;
+        _lastDrawTime = CACurrentMediaTime();
+        _frameAccumulator = 1.0 / nes::kFrameRateNtsc;
         self.delegate = self;
         self.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
         self.framebufferOnly = NO;
         self.enableSetNeedsDisplay = NO;
         self.paused = NO;
-        self.preferredFramesPerSecond = nes::kFrameRateNtsc;
+        self.preferredFramesPerSecond = 60;
         self.layer.magnificationFilter = kCAFilterNearest;
         _commandQueue = [self.device newCommandQueue];
         NSError* error = nil;
@@ -212,11 +218,28 @@ private:
 
 - (void)drawInMTKView:(MTKView*)view {
     if (!_emulator || !_emulator->hasCartridge()) {
+        _lastDrawTime = CACurrentMediaTime();
+        _frameAccumulator = 1.0 / nes::kFrameRateNtsc;
         return;
     }
-    _emulator->stepFrame();
-    if (_audio) {
-        _audio->push(_emulator->takeAudioSamples());
+
+    const CFTimeInterval now = CACurrentMediaTime();
+    const double elapsed = std::min<double>(now - _lastDrawTime, 0.1);
+    _lastDrawTime = now;
+    _frameAccumulator += elapsed;
+
+    constexpr double frameDuration = 1.0 / nes::kFrameRateNtsc;
+    int framesRun = 0;
+    while (_frameAccumulator >= frameDuration && framesRun < 3) {
+        _emulator->stepFrame();
+        if (_audio) {
+            _audio->push(_emulator->takeAudioSamples());
+        }
+        _frameAccumulator -= frameDuration;
+        ++framesRun;
+    }
+    if (framesRun == 3 && _frameAccumulator >= frameDuration) {
+        _frameAccumulator = 0.0;
     }
     [self uploadFrame];
     id<CAMetalDrawable> drawable = view.currentDrawable;
